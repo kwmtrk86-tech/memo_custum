@@ -361,6 +361,73 @@
         position: relative;
         display: inline-block;
       }
+
+      /* ── PROFILE MENU ── */
+      .profile-menu {
+        position: relative;
+        display: inline-block;
+      }
+      .profile-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        min-width: 200px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        margin-top: 4px;
+        padding: 8px 0;
+        overflow: hidden;
+      }
+      .profile-dropdown.open {
+        display: block;
+      }
+      .profile-header {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .profile-select {
+        display: block;
+        width: calc(100% - 12px);
+        margin: 0 6px;
+        padding: 6px 8px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .profile-select:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .profile-action-btn {
+        display: block;
+        width: calc(100% - 12px);
+        margin: 2px 6px;
+        padding: 6px 8px;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .profile-action-btn:hover {
+        background: var(--border);
+      }
+
+      .theme-menu {
+        position: relative;
+        display: inline-block;
+      }
       .theme-dropdown {
         display: none;
         position: absolute;
@@ -610,6 +677,45 @@
 
       <div class="spacer"></div>
 
+      <div class="profile-menu">
+        <button class="btn btn-icon" id="btn-profile" title="プロフィール管理">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </button>
+        <div class="profile-dropdown" id="profile-dropdown">
+          <div class="profile-header">
+            <span style="font-size: 12px; color: var(--muted)"
+              >現在のプロフィール</span
+            >
+          </div>
+          <select id="profile-select" class="profile-select"></select>
+          <div style="border-top: 1px solid var(--border); margin: 6px 0"></div>
+          <button
+            class="profile-action-btn"
+            id="btn-profile-new"
+            title="新規作成"
+          >
+            +新規作成
+          </button>
+          <button
+            class="profile-action-btn"
+            id="btn-profile-delete"
+            title="削除"
+          >
+            −削除
+          </button>
+        </div>
+      </div>
+
       <div class="theme-menu">
         <button class="btn btn-icon" id="btn-theme" title="テーマ切替">
           <svg
@@ -710,11 +816,139 @@
       // ── localStorage メモ管理 ──────────────────────────────
       const MEMOS_KEY = "browser-memo-list-v1";
       const CONF_KEY = "browser-memo-conf-v1";
+      const PROFILES_KEY = "browser-memo-profiles-v1";
+      const CURRENT_PROFILE_KEY = "browser-memo-current-profile-v1";
 
       let memos = [];
       let currentMemoId = null;
       let saveTimer = null;
       let isDirty = false;
+
+      // プロフィール管理
+      let profiles = [];
+      let currentProfileName = "デフォルト";
+
+      // プロフィール読み込み
+      function loadProfiles() {
+        const saved = localStorage.getItem(PROFILES_KEY);
+        if (saved) {
+          profiles = JSON.parse(saved);
+        } else {
+          // 既存の設定があれば移行
+          const oldConf = localStorage.getItem(CONF_KEY);
+          if (oldConf) {
+            const conf = JSON.parse(oldConf);
+            profiles = [
+              {
+                name: "デフォルト",
+                fontSize: conf.fontSize || 15,
+                theme: conf.theme || "dark",
+              },
+            ];
+          } else {
+            profiles = [
+              {
+                name: "デフォルト",
+                fontSize: 15,
+                theme: "dark",
+              },
+            ];
+          }
+        }
+
+        const saved_current = localStorage.getItem(CURRENT_PROFILE_KEY);
+        if (saved_current && profiles.find((p) => p.name === saved_current)) {
+          currentProfileName = saved_current;
+        } else {
+          currentProfileName = profiles[0].name;
+        }
+        persistProfiles();
+      }
+
+      // プロフィール保存
+      function persistProfiles() {
+        localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+        localStorage.setItem(CURRENT_PROFILE_KEY, currentProfileName);
+      }
+
+      // 現在のプロフィール取得
+      function getCurrentProfile() {
+        return profiles.find((p) => p.name === currentProfileName);
+      }
+
+      // プロフィール作成
+      function createProfile() {
+        const name = prompt("新しいプロフィールの名前を入力してください:");
+        if (!name) return;
+        if (name.length > 30) {
+          showToast("プロフィール名は30文字以内です");
+          return;
+        }
+        if (profiles.some((p) => p.name === name)) {
+          showToast("同じ名前のプロフィールが既に存在します");
+          return;
+        }
+
+        const currentProfile = getCurrentProfile();
+        profiles.push({
+          name: name,
+          fontSize: currentProfile.fontSize,
+          theme: currentProfile.theme,
+        });
+        persistProfiles();
+        renderProfileDropdown();
+        showToast(`「${name}」プロフィールを作成しました`);
+      }
+
+      // プロフィール削除
+      function deleteProfile() {
+        if (profiles.length <= 1) {
+          showToast("最後のプロフィールは削除できません");
+          return;
+        }
+
+        const name = currentProfileName;
+        if (confirm(`「${name}」プロフィールを削除しますか？`)) {
+          profiles = profiles.filter((p) => p.name !== name);
+          currentProfileName = profiles[0].name;
+          persistProfiles();
+          applyProfile(getCurrentProfile());
+          renderProfileDropdown();
+          showToast(`「${name}」プロフィールを削除しました`);
+        }
+      }
+
+      // プロフィール切り替え
+      function switchProfile(name) {
+        if (!profiles.find((p) => p.name === name)) return;
+        currentProfileName = name;
+        persistProfiles();
+        const profile = getCurrentProfile();
+        applyProfile(profile);
+        renderProfileDropdown();
+      }
+
+      // プロフィール適用
+      function applyProfile(profile) {
+        if (!profile) return;
+        setFontSize(profile.fontSize, false);
+        setTheme(profile.theme, false);
+      }
+
+      // プロフィールドロップダウンレンダー
+      function renderProfileDropdown() {
+        const select = document.getElementById("profile-select");
+        select.innerHTML = "";
+        profiles.forEach((profile) => {
+          const option = document.createElement("option");
+          option.value = profile.name;
+          option.textContent = profile.name;
+          if (profile.name === currentProfileName) {
+            option.selected = true;
+          }
+          select.appendChild(option);
+        });
+      }
 
       function loadMemos() {
         const saved = localStorage.getItem(MEMOS_KEY);
@@ -893,7 +1127,13 @@
         editor.style.fontSize = fontSize + "px";
         lineNums.style.fontSize = fontSize + "px";
         document.getElementById("fs-label").textContent = fontSize + "px";
-        if (save) saveConf();
+        if (save) {
+          const profile = getCurrentProfile();
+          if (profile) {
+            profile.fontSize = fontSize;
+            persistProfiles();
+          }
+        }
       }
 
       document
@@ -934,7 +1174,13 @@
           btn.classList.toggle("active", btn.dataset.theme === theme);
         });
 
-        if (save) saveConf();
+        if (save) {
+          const profile = getCurrentProfile();
+          if (profile) {
+            profile.theme = theme;
+            persistProfiles();
+          }
+        }
       }
 
       // テーマボタンクリックでドロップダウン表示
@@ -960,6 +1206,44 @@
       // ドロップダウン外クリックで閉じる
       document.addEventListener("click", () => {
         themeDropdown.classList.remove("open");
+      });
+
+      // ── プロフィール管理 ────────────────────────────────────
+      const profileBtn = document.getElementById("btn-profile");
+      const profileDropdown = document.getElementById("profile-dropdown");
+      const profileSelect = document.getElementById("profile-select");
+
+      profileBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        profileDropdown.classList.toggle("open");
+      });
+
+      profileSelect.addEventListener("change", (e) => {
+        switchProfile(e.target.value);
+      });
+
+      document
+        .getElementById("btn-profile-new")
+        .addEventListener("click", () => {
+          createProfile();
+          profileDropdown.classList.remove("open");
+        });
+
+      document
+        .getElementById("btn-profile-delete")
+        .addEventListener("click", () => {
+          deleteProfile();
+          profileDropdown.classList.remove("open");
+        });
+
+      // プロフィールドロップダウン外クリックで閉じる
+      document.addEventListener("click", (e) => {
+        if (
+          !profileBtn.contains(e.target) &&
+          !profileDropdown.contains(e.target)
+        ) {
+          profileDropdown.classList.remove("open");
+        }
       });
 
       function saveConf() {
@@ -1160,10 +1444,10 @@
       }
 
       // ── 初期化 ────────────────────────────────────────────
+      loadProfiles();
       loadMemos();
-      const conf = JSON.parse(localStorage.getItem(CONF_KEY) || "{}");
-      if (conf.fontSize) setFontSize(conf.fontSize, false);
-      if (conf.theme) setTheme(conf.theme, false);
+      applyProfile(getCurrentProfile());
+      renderProfileDropdown();
       renderTabs();
       renderMemoContent();
       updateStats();
