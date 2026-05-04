@@ -858,7 +858,7 @@
       // ── 統計カウント ────────────────────────────────────────
       function updateStats() {
         const val = editor.value;
-        const chars = val.length;
+        const chars = val.replace(/[\r\n\s\u3000]/g, "").length;
         const lines = val === "" ? 1 : val.split("\n").length;
         const words =
           val.trim() === ""
