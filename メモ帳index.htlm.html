@@ -41,6 +41,66 @@
         --highlight-current: #8a603066;
       }
 
+      [data-theme="blue"] {
+        --bg: #0a1628;
+        --surface: #0f1f33;
+        --border: #1a3a5c;
+        --text: #d0e0f0;
+        --muted: #5a7a9a;
+        --accent: #4a9eff;
+        --accent-dim: #2a6acd;
+        --highlight-bg: #4a9eff33;
+        --highlight-current: #4a9eff88;
+      }
+
+      [data-theme="green"] {
+        --bg: #0a1a0f;
+        --surface: #0f2a1a;
+        --border: #1a4a2a;
+        --text: #d0f0d8;
+        --muted: #5a9a6a;
+        --accent: #4aea7a;
+        --accent-dim: #2aaa4a;
+        --highlight-bg: #4aea7a33;
+        --highlight-current: #4aea7a88;
+      }
+
+      [data-theme="purple"] {
+        --bg: #1a0a28;
+        --surface: #2a1538;
+        --border: #3a2558;
+        --text: #e0d0f0;
+        --muted: #8a6aaa;
+        --accent: #b78eff;
+        --accent-dim: #8a5acd;
+        --highlight-bg: #b78eff33;
+        --highlight-current: #b78eff88;
+      }
+
+      [data-theme="ocean"] {
+        --bg: #051a24;
+        --surface: #0a2a38;
+        --border: #154a6a;
+        --text: #c0e0f0;
+        --muted: #6a9aaa;
+        --accent: #48c4e8;
+        --accent-dim: #2a8aaa;
+        --highlight-bg: #48c4e833;
+        --highlight-current: #48c4e888;
+      }
+
+      [data-theme="cherry"] {
+        --bg: #2a0a14;
+        --surface: #3a1528;
+        --border: #5a2a48;
+        --text: #f0d8e0;
+        --muted: #aa7a8a;
+        --accent: #ff6a9e;
+        --accent-dim: #dd3a7a;
+        --highlight-bg: #ff6a9e33;
+        --highlight-current: #ff6a9e88;
+      }
+
       *,
       *::before,
       *::after {
@@ -296,6 +356,49 @@
         color: var(--accent);
       }
 
+      /* ── THEME MENU ── */
+      .theme-menu {
+        position: relative;
+        display: inline-block;
+      }
+      .theme-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        min-width: 160px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        margin-top: 4px;
+        overflow: hidden;
+      }
+      .theme-dropdown.open {
+        display: block;
+      }
+      .theme-option {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 12px;
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.15s;
+      }
+      .theme-option:hover {
+        background: var(--border);
+      }
+      .theme-option.active {
+        background: var(--accent);
+        color: #111;
+      }
+
       /* ── TOAST ── */
       .toast {
         position: fixed;
@@ -507,19 +610,30 @@
 
       <div class="spacer"></div>
 
-      <button class="btn btn-icon" id="btn-theme" title="テーマ切替">
-        <svg
-          id="icon-theme"
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-        </svg>
-      </button>
+      <div class="theme-menu">
+        <button class="btn btn-icon" id="btn-theme" title="テーマ切替">
+          <svg
+            id="icon-theme"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+          </svg>
+        </button>
+        <div class="theme-dropdown" id="theme-dropdown">
+          <button class="theme-option" data-theme="dark">ダーク</button>
+          <button class="theme-option" data-theme="light">ライト</button>
+          <button class="theme-option" data-theme="blue">ブルー</button>
+          <button class="theme-option" data-theme="green">グリーン</button>
+          <button class="theme-option" data-theme="purple">パープル</button>
+          <button class="theme-option" data-theme="ocean">オーシャン</button>
+          <button class="theme-option" data-theme="cherry">チェリー</button>
+        </div>
+      </div>
     </div>
 
     <div class="search-bar" id="search-bar">
@@ -791,25 +905,62 @@
 
       // ── テーマ ────────────────────────────────────────────
       let currentTheme = "dark";
+      const themes = [
+        "dark",
+        "light",
+        "blue",
+        "green",
+        "purple",
+        "ocean",
+        "cherry",
+      ];
+      const themeLabels = {
+        dark: "ダーク",
+        light: "ライト",
+        blue: "ブルー",
+        green: "グリーン",
+        purple: "パープル",
+        ocean: "オーシャン",
+        cherry: "チェリー",
+      };
+
       function setTheme(theme, save = true) {
+        if (!themes.includes(theme)) theme = "dark";
         currentTheme = theme;
         document.body.dataset.theme = theme;
-        const icon = document.getElementById("icon-theme");
-        if (theme === "dark") {
-          icon.innerHTML =
-            '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
-        } else {
-          icon.innerHTML =
-            '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
-        }
+
+        // ドロップダウンの選択状態を更新
+        document.querySelectorAll(".theme-option").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.theme === theme);
+        });
+
         if (save) saveConf();
       }
 
-      document
-        .getElementById("btn-theme")
-        .addEventListener("click", () =>
-          setTheme(currentTheme === "dark" ? "light" : "dark"),
-        );
+      // テーマボタンクリックでドロップダウン表示
+      const themeBtn = document.getElementById("btn-theme");
+      const themeDropdown = document.getElementById("theme-dropdown");
+
+      themeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        themeDropdown.classList.toggle("open");
+      });
+
+      // テーマ選択
+      document.querySelectorAll(".theme-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setTheme(btn.dataset.theme);
+          themeDropdown.classList.remove("open");
+          showToast(
+            `テーマを「${themeLabels[btn.dataset.theme]}」に変更しました`,
+          );
+        });
+      });
+
+      // ドロップダウン外クリックで閉じる
+      document.addEventListener("click", () => {
+        themeDropdown.classList.remove("open");
+      });
 
       function saveConf() {
         localStorage.setItem(
