@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>音当てゲーム（C4〜C5）</title>
+<style>
+    body {
+        font-family: sans-serif;
+        text-align: center;
+        margin-top: 50px;
+    }
+    button {
+        padding: 15px 20px;
+        margin: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+    }
+    button:hover {
+        background-color: #e0e0e0;
+    }
+    #playBtn {
+        font-size: 20px;
+        font-weight: bold;
+        background-color: #e6f7ff;
+        border-color: #91d5ff;
+        margin-bottom: 20px;
+    }
+    #message {
+        margin-top: 30px;
+        font-weight: bold;
+        font-size: 1.5em;
+        min-height: 2em;
+    }
+</style>
+</head>
+<body>
+
+<h2>音当てゲーム</h2>
+<button id="playBtn">音を鳴らす</button>
+<div id="keyboard"></div>
+<div id="message">音を鳴らしてスタートしてください</div>
+
+<script>
+// Web Audio APIの初期化
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// C4からC5までの周波数データ
+const notes = [
+    { name: "C (ド)", freq: 261.63 },
+    { name: "C#", freq: 277.18 },
+    { name: "D (レ)", freq: 293.66 },
+    { name: "D#", freq: 311.13 },
+    { name: "E (ミ)", freq: 329.63 },
+    { name: "F (ファ)", freq: 349.23 },
+    { name: "F#", freq: 369.99 },
+    { name: "G (ソ)", freq: 392.00 },
+    { name: "G#", freq: 415.30 },
+    { name: "A (ラ)", freq: 440.00 },
+    { name: "A#", freq: 466.16 },
+    { name: "B (シ)", freq: 493.88 },
+    { name: "C (高いド)", freq: 523.25 }
+];
+
+let currentNote = null;
+
+// 音を鳴らす関数
+function playSound(freq) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    // ピアノに近い丸みのある音にするためsine波を使用
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start();
+    // 音を自然に減衰させる
+    gain.gain.setValueAtTime(1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+    osc.stop(audioCtx.currentTime + 1.5);
+}
+
+// 「音を鳴らす」ボタンの処理
+document.getElementById('playBtn').addEventListener('click', () => {
+    // ブラウザの自動再生ポリシー対応
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    
+    const randomIndex = Math.floor(Math.random() * notes.length);
+    currentNote = notes[randomIndex];
+    playSound(currentNote.freq);
+    
+    document.getElementById('message').textContent = "何の音でしょう？";
+    document.getElementById('message').style.color = "black";
+});
+
+// 選択肢ボタンの生成
+const keyboardDiv = document.getElementById('keyboard');
+notes.forEach(note => {
+    const btn = document.createElement('button');
+    btn.textContent = note.name;
+    btn.addEventListener('click', () => {
+        if (!currentNote) {
+            document.getElementById('message').textContent = "先に「音を鳴らす」ボタンを押してください。";
+            return;
+        }
+        
+        if (note.name === currentNote.name) {
+            document.getElementById('message').textContent = `正解！ (${note.name}) です。`;
+            document.getElementById('message').style.color = "green";
+            currentNote = null; // 正解したらリセット
+        } else {
+            document.getElementById('message').textContent = "はずれ。もう一度考えてみてください。";
+            document.getElementById('message').style.color = "red";
+            // 間違えた場合は再度同じ音を鳴らしてヒントにする
+            playSound(currentNote.freq); 
+        }
+    });
+    keyboardDiv.appendChild(btn);
+});
+</script>
+
+</body>
+</html>

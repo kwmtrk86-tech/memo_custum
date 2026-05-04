@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>メモ帳</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Noto+Sans+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0f0f0f;
+        --surface: #171717;
+        --border: #2a2a2a;
+        --text: #e8e0d0;
+        --muted: #666;
+        --accent: #c8a96e;
+        --accent-dim: #7a6440;
+        --highlight-bg: #c8a96e33;
+        --highlight-current: #c8a96e88;
+        --danger: #c06060;
+        --success: #6a9f6a;
+        --toolbar-h: 48px;
+        --status-h: 36px;
+        --font-editor: "DM Mono", monospace;
+        --font-ui: "Noto Sans JP", sans-serif;
+        --font-size: 15px;
+        --radius: 4px;
+      }
+
+      [data-theme="light"] {
+        --bg: #f4f0e8;
+        --surface: #fffdf8;
+        --border: #d8d0c0;
+        --text: #1a1a1a;
+        --muted: #999;
+        --accent: #8a6030;
+        --accent-dim: #b8943e;
+        --highlight-bg: #8a603030;
+        --highlight-current: #8a603066;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: var(--font-ui);
+        background: var(--bg);
+        color: var(--text);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+
+      /* ── TOOLBAR ── */
+      .toolbar {
+        height: var(--toolbar-h);
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        gap: 4px;
+        flex-shrink: 0;
+        user-select: none;
+      }
+
+      .toolbar-title {
+        font-family: var(--font-editor);
+        font-size: 13px;
+        color: var(--accent);
+        letter-spacing: 0.08em;
+        margin-right: 8px;
+        font-weight: 500;
+      }
+
+      .sep {
+        width: 1px;
+        height: 20px;
+        background: var(--border);
+        margin: 0 6px;
+        flex-shrink: 0;
+      }
+
+      .btn {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px;
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+        background: transparent;
+        color: var(--muted);
+        font-family: var(--font-ui);
+        font-size: 12px;
+        cursor: pointer;
+        transition:
+          color 0.15s,
+          background 0.15s,
+          border-color 0.15s;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .btn:hover {
+        color: var(--text);
+        background: var(--border);
+      }
+      .btn.active,
+      .btn:active {
+        color: var(--accent);
+        border-color: var(--accent-dim);
+        background: var(--highlight-bg);
+      }
+      .btn svg {
+        flex-shrink: 0;
+      }
+
+      .btn-icon {
+        padding: 5px 7px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      /* ── SEARCH BAR ── */
+      .search-bar {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .search-bar.open {
+        display: flex;
+      }
+      .search-bar input {
+        flex: 1;
+        max-width: 280px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 4px 10px;
+        border-radius: var(--radius);
+        font-family: var(--font-editor);
+        font-size: 13px;
+        outline: none;
+      }
+      .search-bar input:focus {
+        border-color: var(--accent-dim);
+      }
+      .search-info {
+        font-size: 12px;
+        color: var(--muted);
+        min-width: 70px;
+        font-family: var(--font-editor);
+      }
+
+      /* ── EDITOR ── */
+      .editor-wrap {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+      }
+
+      .line-nums {
+        width: 48px;
+        padding: 16px 8px 16px 0;
+        text-align: right;
+        font-family: var(--font-editor);
+        font-size: var(--font-size);
+        line-height: 1.7;
+        color: var(--muted);
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        overflow: hidden;
+        flex-shrink: 0;
+        pointer-events: none;
+        user-select: none;
+        transition: background 0.2s;
+      }
+
+      #editor {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        resize: none;
+        color: var(--text);
+        font-family: var(--font-editor);
+        font-size: var(--font-size);
+        line-height: 1.7;
+        padding: 16px 20px;
+        white-space: pre-wrap;
+        overflow-y: auto;
+        caret-color: var(--accent);
+        tab-size: 2;
+        transition: font-size 0.1s;
+      }
+      #editor::selection {
+        background: var(--highlight-bg);
+      }
+      #editor::placeholder {
+        color: var(--muted);
+      }
+
+      /* highlight overlay */
+      .highlight-layer {
+        position: absolute;
+        top: 0;
+        left: 49px;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+
+      /* ── STATUS BAR ── */
+      .statusbar {
+        height: var(--status-h);
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 20px;
+        flex-shrink: 0;
+        font-family: var(--font-editor);
+        font-size: 12px;
+        color: var(--muted);
+        user-select: none;
+      }
+
+      .stat {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .stat-value {
+        color: var(--accent);
+        font-weight: 500;
+        transition: color 0.2s;
+      }
+      .stat-value.changed {
+        color: var(--text);
+      }
+
+      .save-indicator {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: auto;
+        transition: opacity 0.4s;
+      }
+      .save-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--success);
+        flex-shrink: 0;
+      }
+      .save-dot.dirty {
+        background: var(--accent);
+      }
+
+      .font-size-ctrl {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 8px;
+      }
+      .fs-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 14px;
+        padding: 0 3px;
+        line-height: 1;
+        transition: color 0.15s;
+      }
+      .fs-btn:hover {
+        color: var(--accent);
+      }
+
+      /* ── TOAST ── */
+      .toast {
+        position: fixed;
+        bottom: 52px;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        background: var(--accent);
+        color: #111;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-family: var(--font-ui);
+        font-weight: 500;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+        white-space: nowrap;
+        z-index: 100;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* scrollbar */
+      #editor::-webkit-scrollbar {
+        width: 6px;
+      }
+      #editor::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #editor::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+
+      /* ── MEMO TABS ── */
+      .memo-tabs {
+        height: 40px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        gap: 4px;
+        overflow-x: auto;
+        flex-shrink: 0;
+        user-select: none;
+      }
+      .memo-tabs::-webkit-scrollbar {
+        height: 4px;
+      }
+      .memo-tabs::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .memo-tabs::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+      }
+
+      .memo-tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--muted);
+        font-size: 12px;
+        font-family: var(--font-ui);
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: all 0.15s;
+      }
+      .memo-tab:hover {
+        background: var(--border);
+        color: var(--text);
+      }
+      .memo-tab.active {
+        background: var(--accent);
+        color: #111;
+        border-color: var(--accent);
+      }
+      .memo-tab-close {
+        background: none;
+        border: none;
+        color: currentColor;
+        cursor: pointer;
+        font-size: 13px;
+        padding: 0 2px;
+        line-height: 1;
+        opacity: 0.7;
+        transition: opacity 0.15s;
+      }
+      .memo-tab-close:hover {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <div class="memo-tabs" id="memo-tabs"></div>
+
+    <div class="toolbar">
+      <span class="toolbar-title">MEMO</span>
+
+      <button class="btn" id="btn-new-memo" title="新しいメモを作成">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        新規
+      </button>
+
+      <div class="sep"></div>
+
+      <button class="btn" id="btn-timestamp" title="タイムスタンプ挿入">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        日時
+      </button>
+
+      <div class="sep"></div>
+
+      <button class="btn" id="btn-search" title="検索 (Ctrl+F)">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        検索
+      </button>
+
+      <div class="sep"></div>
+
+      <button class="btn" id="btn-copy" title="全コピー">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+        </svg>
+        コピー
+      </button>
+
+      <button class="btn" id="btn-download" title="テキストとして保存">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        保存
+      </button>
+
+      <div class="sep"></div>
+
+      <button class="btn" id="btn-clear" title="全クリア">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+          <path d="M10 11v6M14 11v6" />
+        </svg>
+        クリア
+      </button>
+
+      <div class="spacer"></div>
+
+      <button class="btn btn-icon" id="btn-theme" title="テーマ切替">
+        <svg
+          id="icon-theme"
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="search-bar" id="search-bar">
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        style="color: var(--muted); flex-shrink: 0"
+      >
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+      <input type="text" id="search-input" placeholder="検索ワードを入力…" />
+      <span class="search-info" id="search-info">—</span>
+      <button class="btn" id="btn-prev">↑ 前</button>
+      <button class="btn" id="btn-next">↓ 次</button>
+      <button class="btn" id="btn-search-close">✕</button>
+    </div>
+
+    <div class="editor-wrap">
+      <div class="line-nums" id="line-nums">1</div>
+      <textarea
+        id="editor"
+        placeholder="ここにメモを入力してください…"
+        spellcheck="false"
+        autocorrect="off"
+        autocapitalize="off"
+      ></textarea>
+    </div>
+
+    <div class="statusbar">
+      <div class="stat">
+        <span>文字数</span>
+        <span class="stat-value" id="stat-chars">0</span>
+      </div>
+      <div class="stat">
+        <span>行数</span>
+        <span class="stat-value" id="stat-lines">1</span>
+      </div>
+      <div class="stat">
+        <span>単語数</span>
+        <span class="stat-value" id="stat-words">0</span>
+      </div>
+      <div class="stat">
+        <span>選択</span>
+        <span class="stat-value" id="stat-sel">0</span>
+      </div>
+
+      <div class="font-size-ctrl">
+        <button class="fs-btn" id="fs-down" title="文字を小さく">A−</button>
+        <span style="font-size: 11px; color: var(--muted)" id="fs-label"
+          >15px</span
+        >
+        <button class="fs-btn" id="fs-up" title="文字を大きく">A+</button>
+      </div>
+
+      <div class="save-indicator" id="save-indicator">
+        <div class="save-dot" id="save-dot"></div>
+        <span id="save-label">保存済み</span>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const editor = document.getElementById("editor");
+      const lineNums = document.getElementById("line-nums");
+      const toast = document.getElementById("toast");
+      const memoTabs = document.getElementById("memo-tabs");
+
+      // ── localStorage メモ管理 ──────────────────────────────
+      const MEMOS_KEY = "browser-memo-list-v1";
+      const CONF_KEY = "browser-memo-conf-v1";
+
+      let memos = [];
+      let currentMemoId = null;
+      let saveTimer = null;
+      let isDirty = false;
+
+      function loadMemos() {
+        const saved = localStorage.getItem(MEMOS_KEY);
+        if (saved) {
+          memos = JSON.parse(saved);
+        } else {
+          // 古い単一メモデータがあれば移行
+          const oldContent = localStorage.getItem("browser-memo-v1");
+          if (oldContent) {
+            memos = [{ id: Date.now(), name: "メモ 1", content: oldContent }];
+          } else {
+            memos = [{ id: Date.now(), name: "メモ 1", content: "" }];
+          }
+        }
+        if (memos.length === 0) {
+          memos = [{ id: Date.now(), name: "メモ 1", content: "" }];
+        }
+        currentMemoId = memos[0].id;
+        persistMemos();
+      }
+
+      function persistMemos() {
+        localStorage.setItem(MEMOS_KEY, JSON.stringify(memos));
+      }
+
+      function getCurrentMemo() {
+        return memos.find((m) => m.id === currentMemoId);
+      }
+
+      function switchMemo(memoId) {
+        const current = getCurrentMemo();
+        if (current) {
+          current.content = editor.value;
+        }
+        currentMemoId = memoId;
+        renderMemoContent();
+        renderTabs();
+        isDirty = false;
+        document.getElementById("save-dot").classList.remove("dirty");
+        document.getElementById("save-label").textContent = "保存済み";
+      }
+
+      function renderMemoContent() {
+        const current = getCurrentMemo();
+        if (current) {
+          editor.value = current.content;
+          updateStats();
+        }
+      }
+
+      function renderTabs() {
+        memoTabs.innerHTML = "";
+        memos.forEach((memo) => {
+          const tab = document.createElement("button");
+          tab.className =
+            "memo-tab" + (memo.id === currentMemoId ? " active" : "");
+          tab.innerHTML = `<span>${escapeHtml(memo.name)}</span><button class="memo-tab-close" data-id="${memo.id}">✕</button>`;
+          tab.addEventListener("click", (e) => {
+            if (e.target.closest(".memo-tab-close")) {
+              e.stopPropagation();
+              return;
+            }
+            switchMemo(memo.id);
+          });
+          tab
+            .querySelector(".memo-tab-close")
+            .addEventListener("click", (e) => {
+              e.stopPropagation();
+              deleteMemo(memo.id);
+            });
+          memoTabs.appendChild(tab);
+        });
+      }
+
+      function createNewMemo() {
+        const num = memos.length + 1;
+        const newMemo = {
+          id: Date.now(),
+          name: `メモ ${num}`,
+          content: "",
+        };
+        memos.push(newMemo);
+        persistMemos();
+        switchMemo(newMemo.id);
+        // 名前をダブルクリックで編集できるようにするため、タブをクリック
+        setTimeout(() => {
+          const tab = memoTabs.querySelector(`[data-id="${newMemo.id}"]`);
+          if (tab) tab.click();
+        }, 50);
+      }
+
+      function deleteMemo(memoId) {
+        if (memos.length <= 1) {
+          showToast("最後のメモは削除できません");
+          return;
+        }
+        const memo = memos.find((m) => m.id === memoId);
+        if (memo && confirm(`"${memo.name}" を削除しますか？`)) {
+          memos = memos.filter((m) => m.id !== memoId);
+          if (currentMemoId === memoId) {
+            currentMemoId = memos[0].id;
+          }
+          persistMemos();
+          renderMemoContent();
+          renderTabs();
+          showToast("削除しました");
+        }
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // ── ボタンイベント ────────────────────────────────────
+      document
+        .getElementById("btn-new-memo")
+        .addEventListener("click", createNewMemo);
+
+      // ── 自動保存 ──────────────────────────────────────────
+      function markDirty() {
+        isDirty = true;
+        document.getElementById("save-dot").classList.add("dirty");
+        document.getElementById("save-label").textContent = "未保存…";
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(persist, 800);
+      }
+
+      function persist() {
+        const current = getCurrentMemo();
+        if (current) {
+          current.content = editor.value;
+          persistMemos();
+          isDirty = false;
+          document.getElementById("save-dot").classList.remove("dirty");
+          document.getElementById("save-label").textContent = "保存済み";
+        }
+      }
+
+      // ── 統計カウント ────────────────────────────────────────
+      function updateStats() {
+        const val = editor.value;
+        const chars = val.length;
+        const lines = val === "" ? 1 : val.split("\n").length;
+        const words =
+          val.trim() === ""
+            ? 0
+            : val
+                .trim()
+                .split(/[\s\u3000\u3001\u3002、。！？\n]+/)
+                .filter(Boolean).length;
+
+        // 選択文字数
+        const selLen = Math.abs(editor.selectionEnd - editor.selectionStart);
+
+        document.getElementById("stat-chars").textContent = chars;
+        document.getElementById("stat-lines").textContent = lines;
+        document.getElementById("stat-words").textContent = words;
+        document.getElementById("stat-sel").textContent = selLen;
+
+        updateLineNums(lines);
+      }
+
+      // ── 行番号 ──────────────────────────────────────────────
+      function updateLineNums(count) {
+        const nums = [];
+        for (let i = 1; i <= count; i++) nums.push(i);
+        lineNums.textContent = nums.join("\n");
+      }
+
+      // ── フォントサイズ ────────────────────────────────────
+      let fontSize = 15;
+      function setFontSize(size, save = true) {
+        fontSize = Math.min(28, Math.max(11, size));
+        editor.style.fontSize = fontSize + "px";
+        lineNums.style.fontSize = fontSize + "px";
+        document.getElementById("fs-label").textContent = fontSize + "px";
+        if (save) saveConf();
+      }
+
+      document
+        .getElementById("fs-up")
+        .addEventListener("click", () => setFontSize(fontSize + 1));
+      document
+        .getElementById("fs-down")
+        .addEventListener("click", () => setFontSize(fontSize - 1));
+
+      // ── テーマ ────────────────────────────────────────────
+      let currentTheme = "dark";
+      function setTheme(theme, save = true) {
+        currentTheme = theme;
+        document.body.dataset.theme = theme;
+        const icon = document.getElementById("icon-theme");
+        if (theme === "dark") {
+          icon.innerHTML =
+            '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
+        } else {
+          icon.innerHTML =
+            '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+        }
+        if (save) saveConf();
+      }
+
+      document
+        .getElementById("btn-theme")
+        .addEventListener("click", () =>
+          setTheme(currentTheme === "dark" ? "light" : "dark"),
+        );
+
+      function saveConf() {
+        localStorage.setItem(
+          CONF_KEY,
+          JSON.stringify({ fontSize, theme: currentTheme }),
+        );
+      }
+
+      // ── タイムスタンプ挿入 ────────────────────────────────
+      document.getElementById("btn-timestamp").addEventListener("click", () => {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const ts = `[${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
+        const pos = editor.selectionStart;
+        const val = editor.value;
+        editor.value = val.slice(0, pos) + ts + val.slice(pos);
+        editor.selectionStart = editor.selectionEnd = pos + ts.length;
+        editor.focus();
+        markDirty();
+        updateStats();
+        showToast("タイムスタンプを挿入しました");
+      });
+
+      // ── コピー ────────────────────────────────────────────
+      document.getElementById("btn-copy").addEventListener("click", () => {
+        if (!editor.value) {
+          showToast("内容がありません");
+          return;
+        }
+        navigator.clipboard
+          .writeText(editor.value)
+          .then(() => showToast("クリップボードにコピーしました"));
+      });
+
+      // ── ダウンロード ────────────────────────────────────
+      document.getElementById("btn-download").addEventListener("click", () => {
+        if (!editor.value) {
+          showToast("内容がありません");
+          return;
+        }
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const fname = `memo_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.txt`;
+        const blob = new Blob([editor.value], {
+          type: "text/plain;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fname;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(fname + " を保存しました");
+      });
+
+      // ── クリア ────────────────────────────────────────────
+      document.getElementById("btn-clear").addEventListener("click", () => {
+        if (!editor.value) return;
+        if (confirm("メモの内容をすべて削除しますか？")) {
+          editor.value = "";
+          markDirty();
+          updateStats();
+          showToast("クリアしました");
+        }
+      });
+
+      // ── 検索 ─────────────────────────────────────────────
+      let searchMatches = [];
+      let searchIndex = -1;
+
+      const searchBar = document.getElementById("search-bar");
+      const searchInput = document.getElementById("search-input");
+      const searchInfo = document.getElementById("search-info");
+
+      function openSearch() {
+        searchBar.classList.add("open");
+        document.getElementById("btn-search").classList.add("active");
+        searchInput.focus();
+        if (editor.selectionStart !== editor.selectionEnd) {
+          searchInput.value = editor.value.slice(
+            editor.selectionStart,
+            editor.selectionEnd,
+          );
+        }
+        doSearch();
+      }
+      function closeSearch() {
+        searchBar.classList.remove("open");
+        document.getElementById("btn-search").classList.remove("active");
+        searchMatches = [];
+        searchIndex = -1;
+        searchInfo.textContent = "—";
+        editor.focus();
+      }
+
+      document
+        .getElementById("btn-search")
+        .addEventListener("click", () =>
+          searchBar.classList.contains("open") ? closeSearch() : openSearch(),
+        );
+      document
+        .getElementById("btn-search-close")
+        .addEventListener("click", closeSearch);
+
+      function doSearch() {
+        const q = searchInput.value;
+        searchMatches = [];
+        searchIndex = -1;
+        if (!q) {
+          searchInfo.textContent = "—";
+          return;
+        }
+        const text = editor.value;
+        const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+        let m;
+        while ((m = re.exec(text)) !== null) searchMatches.push(m.index);
+        searchInfo.textContent =
+          searchMatches.length > 0
+            ? `${searchMatches.length} 件`
+            : "見つかりません";
+        if (searchMatches.length > 0) {
+          searchIndex = 0;
+          jumpToMatch();
+        }
+      }
+
+      function jumpToMatch() {
+        if (searchMatches.length === 0) return;
+        const i = searchMatches[searchIndex];
+        const len = searchInput.value.length;
+        editor.focus();
+        editor.setSelectionRange(i, i + len);
+        searchInfo.textContent = `${searchIndex + 1} / ${searchMatches.length} 件`;
+        // scroll into view
+        const lines = editor.value.slice(0, i).split("\n");
+        const lineH = parseFloat(getComputedStyle(editor).lineHeight);
+        editor.scrollTop = (lines.length - 3) * lineH;
+      }
+
+      document.getElementById("btn-next").addEventListener("click", () => {
+        if (!searchMatches.length) return;
+        searchIndex = (searchIndex + 1) % searchMatches.length;
+        jumpToMatch();
+      });
+      document.getElementById("btn-prev").addEventListener("click", () => {
+        if (!searchMatches.length) return;
+        searchIndex =
+          (searchIndex - 1 + searchMatches.length) % searchMatches.length;
+        jumpToMatch();
+      });
+
+      searchInput.addEventListener("input", doSearch);
+      searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.shiftKey
+            ? document.getElementById("btn-prev").click()
+            : document.getElementById("btn-next").click();
+        }
+        if (e.key === "Escape") closeSearch();
+      });
+
+      // ── キーボードショートカット ──────────────────────────
+      document.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+          e.preventDefault();
+          openSearch();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+          e.preventDefault();
+          persist();
+          showToast("保存しました");
+        }
+        if (e.key === "Escape" && searchBar.classList.contains("open"))
+          closeSearch();
+      });
+
+      // ── Toast ─────────────────────────────────────────────
+      let toastTimer = null;
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("show"), 2000);
+      }
+
+      // ── エディタイベント ──────────────────────────────────
+      editor.addEventListener("input", () => {
+        markDirty();
+        updateStats();
+      });
+      editor.addEventListener("keyup", updateStats);
+      editor.addEventListener("mouseup", updateStats);
+      editor.addEventListener("scroll", syncLineScroll);
+
+      function syncLineScroll() {
+        lineNums.scrollTop = editor.scrollTop;
+      }
+
+      // ── 初期化 ────────────────────────────────────────────
+      loadMemos();
+      const conf = JSON.parse(localStorage.getItem(CONF_KEY) || "{}");
+      if (conf.fontSize) setFontSize(conf.fontSize, false);
+      if (conf.theme) setTheme(conf.theme, false);
+      renderTabs();
+      renderMemoContent();
+      updateStats();
+      editor.focus();
+    </script>
+  </body>
+</html>
