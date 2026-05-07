@@ -470,6 +470,86 @@
         color: #111;
       }
 
+      /* ── SHORTCUTS MODAL ── */
+      .shortcuts-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+      }
+      .shortcuts-modal.open {
+        display: flex;
+      }
+      .shortcuts-modal-content {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        max-width: 400px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      }
+      .shortcuts-modal-title {
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--accent);
+        margin-bottom: 16px;
+        font-family: var(--font-editor);
+        letter-spacing: 0.05em;
+      }
+      .shortcuts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .shortcut-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 8px;
+        background: var(--bg);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+      }
+      .shortcut-label {
+        font-size: 13px;
+        color: var(--text);
+        flex: 1;
+      }
+      .shortcut-key {
+        font-family: var(--font-editor);
+        font-size: 12px;
+        background: var(--accent-dim);
+        color: var(--accent);
+        padding: 3px 8px;
+        border-radius: var(--radius);
+        white-space: nowrap;
+        margin-left: 12px;
+        flex-shrink: 0;
+      }
+      .shortcuts-modal-close {
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 24px;
+        padding: 0;
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        transition: color 0.15s;
+      }
+      .shortcuts-modal-close:hover {
+        color: var(--text);
+      }
+
       /* ── TOAST ── */
       .toast {
         position: fixed;
@@ -679,6 +759,22 @@
         クリア
       </button>
 
+      <button class="btn" id="btn-shortcuts" title="ショートカットキー一覧">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            d="M12 19H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8M9 12l3 3 5-5"
+          />
+        </svg>
+        ⌨
+      </button>
+
       <div class="spacer"></div>
 
       <div class="profile-menu">
@@ -810,6 +906,16 @@
     </div>
 
     <div class="toast" id="toast"></div>
+
+    <div class="shortcuts-modal" id="shortcuts-modal">
+      <div class="shortcuts-modal-content">
+        <button class="shortcuts-modal-close" id="shortcuts-modal-close">
+          &times;
+        </button>
+        <div class="shortcuts-modal-title">⌨️ ショートカットキー一覧</div>
+        <div class="shortcuts-list" id="shortcuts-list"></div>
+      </div>
+    </div>
 
     <script>
       const editor = document.getElementById("editor");
@@ -1098,13 +1204,8 @@
         const val = editor.value;
         const chars = val.replace(/[\r\n\s\u3000]/g, "").length;
         const lines = val === "" ? 1 : val.split("\n").length;
-        const words =
-          val.trim() === ""
-            ? 0
-            : val
-                .trim()
-                .split(/[\s\u3000\u3001\u3002、。！？\n]+/)
-                .filter(Boolean).length;
+        // 英語の単語をカウント（単語境界で区切られた単語を抽出）
+        const words = (val.match(/\b\w+\b/g) || []).length;
 
         // 選択文字数
         const selLen = Math.abs(editor.selectionEnd - editor.selectionStart);
@@ -1411,19 +1512,129 @@
       });
 
       // ── キーボードショートカット ──────────────────────────
+      const shortcuts = [
+        { key: "Ctrl+T", action: "新規メモ", fn: createNewMemo },
+        {
+          key: "Ctrl+D",
+          action: "日時を挿入",
+          fn: () => document.getElementById("btn-timestamp").click(),
+        },
+        {
+          key: "Ctrl+S",
+          action: "検索",
+          fn: () => {
+            if (searchBar.classList.contains("open")) {
+              closeSearch();
+            } else {
+              openSearch();
+            }
+          },
+        },
+        {
+          key: "Ctrl+A",
+          action: "全コピー",
+          fn: () => document.getElementById("btn-copy").click(),
+        },
+        {
+          key: "Ctrl+K",
+          action: "保存",
+          fn: () => {
+            persist();
+            showToast("保存しました");
+          },
+        },
+        {
+          key: "Ctrl+J",
+          action: "全クリア",
+          fn: () => document.getElementById("btn-clear").click(),
+        },
+        {
+          key: "Ctrl+W",
+          action: "メモを閉じる",
+          fn: () => {
+            if (currentMemoId) {
+              deleteMemo(currentMemoId);
+            }
+          },
+        },
+      ];
+
       document.addEventListener("keydown", (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+        if (isCtrlOrCmd && e.key.toLowerCase() === "t") {
           e.preventDefault();
-          openSearch();
+          createNewMemo();
         }
-        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        if (isCtrlOrCmd && e.key.toLowerCase() === "d") {
+          e.preventDefault();
+          document.getElementById("btn-timestamp").click();
+        }
+        if (isCtrlOrCmd && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          if (searchBar.classList.contains("open")) {
+            closeSearch();
+          } else {
+            openSearch();
+          }
+        }
+        if (isCtrlOrCmd && e.key.toLowerCase() === "a") {
+          // Note: この条件は、エディタにフォーカスがある場合のみ、デフォルト動作を上書きします
+          if (document.activeElement === editor) {
+            e.preventDefault();
+            document.getElementById("btn-copy").click();
+          }
+        }
+        if (isCtrlOrCmd && e.key.toLowerCase() === "k") {
           e.preventDefault();
           persist();
           showToast("保存しました");
         }
+        if (isCtrlOrCmd && e.key.toLowerCase() === "j") {
+          e.preventDefault();
+          document.getElementById("btn-clear").click();
+        }
+        if (isCtrlOrCmd && e.key.toLowerCase() === "w") {
+          e.preventDefault();
+          if (currentMemoId) {
+            deleteMemo(currentMemoId);
+          }
+        }
         if (e.key === "Escape" && searchBar.classList.contains("open"))
           closeSearch();
       });
+
+      // ── ショートカットキーモーダル ─────────────────────────
+      function openShortcutsModal() {
+        const list = document.getElementById("shortcuts-list");
+        list.innerHTML = "";
+        shortcuts.forEach((sc) => {
+          const item = document.createElement("div");
+          item.className = "shortcut-item";
+          item.innerHTML = `
+            <span class="shortcut-label">${sc.action}</span>
+            <span class="shortcut-key">${sc.key}</span>
+          `;
+          list.appendChild(item);
+        });
+        document.getElementById("shortcuts-modal").classList.add("open");
+      }
+
+      function closeShortcutsModal() {
+        document.getElementById("shortcuts-modal").classList.remove("open");
+      }
+
+      document
+        .getElementById("btn-shortcuts")
+        .addEventListener("click", openShortcutsModal);
+      document
+        .getElementById("shortcuts-modal-close")
+        .addEventListener("click", closeShortcutsModal);
+      document
+        .getElementById("shortcuts-modal")
+        .addEventListener("click", (e) => {
+          if (e.target.id === "shortcuts-modal") closeShortcutsModal();
+        });
 
       // ── Toast ─────────────────────────────────────────────
       let toastTimer = null;
