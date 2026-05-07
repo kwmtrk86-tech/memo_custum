@@ -759,6 +759,20 @@
         クリア
       </button>
 
+      <button class="btn" id="btn-undo" title="戻る">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+        </svg>
+        ↶
+      </button>
+
       <button class="btn" id="btn-shortcuts" title="ショートカットキー一覧">
         <svg
           width="14"
@@ -933,6 +947,52 @@
       let currentMemoId = null;
       let saveTimer = null;
       let isDirty = false;
+
+      // アンドゥ履歴管理
+      let undoHistory = [];
+      const MAX_UNDO_HISTORY = 50;
+
+      function saveUndoState() {
+        const state = {
+          memos: JSON.parse(JSON.stringify(memos)),
+          currentMemoId: currentMemoId,
+          editorContent: editor.value,
+          timestamp: Date.now(),
+        };
+        undoHistory.push(state);
+        if (undoHistory.length > MAX_UNDO_HISTORY) {
+          undoHistory.shift();
+        }
+        updateUndoButtonState();
+      }
+
+      function restoreUndoState() {
+        if (undoHistory.length === 0) return;
+        const state = undoHistory.pop();
+        memos = state.memos;
+        currentMemoId = state.currentMemoId;
+        persistMemos();
+        renderTabs();
+        renderMemoContent();
+        updateStats();
+        isDirty = false;
+        document.getElementById("save-dot").classList.remove("dirty");
+        document.getElementById("save-label").textContent = "保存済み";
+        updateUndoButtonState();
+      }
+
+      function updateUndoButtonState() {
+        const btn = document.getElementById("btn-undo");
+        if (undoHistory.length === 0) {
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+          btn.style.cursor = "not-allowed";
+        } else {
+          btn.disabled = false;
+          btn.style.opacity = "1";
+          btn.style.cursor = "pointer";
+        }
+      }
 
       // プロフィール管理
       let profiles = [];
@@ -1115,25 +1175,93 @@
           const tab = document.createElement("button");
           tab.className =
             "memo-tab" + (memo.id === currentMemoId ? " active" : "");
-          tab.innerHTML = `<span>${escapeHtml(memo.name)}</span><button class="memo-tab-close" data-id="${memo.id}">✕</button>`;
+          tab.dataset.memoId = memo.id;
+
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = memo.name;
+          nameSpan.style.cursor = "text";
+          nameSpan.title = "ダブルクリックで名前を編集";
+
+          nameSpan.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            editMemoName(memo.id, nameSpan);
+          });
+
+          const closeBtn = document.createElement("button");
+          closeBtn.className = "memo-tab-close";
+          closeBtn.textContent = "✕";
+          closeBtn.dataset.id = memo.id;
+          closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteMemo(memo.id);
+          });
+
+          tab.appendChild(nameSpan);
+          tab.appendChild(closeBtn);
+
           tab.addEventListener("click", (e) => {
             if (e.target.closest(".memo-tab-close")) {
               e.stopPropagation();
               return;
             }
-            switchMemo(memo.id);
+            if (!e.target.closest("input")) {
+              switchMemo(memo.id);
+            }
           });
-          tab
-            .querySelector(".memo-tab-close")
-            .addEventListener("click", (e) => {
-              e.stopPropagation();
-              deleteMemo(memo.id);
-            });
+
           memoTabs.appendChild(tab);
         });
       }
 
+      function editMemoName(memoId, nameSpan) {
+        const memo = memos.find((m) => m.id === memoId);
+        if (!memo) return;
+
+        const oldName = memo.name;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = oldName;
+        input.style.width = "120px";
+        input.style.padding = "3px 6px";
+        input.style.border = "1px solid var(--accent)";
+        input.style.borderRadius = "3px";
+        input.style.background = "var(--bg)";
+        input.style.color = "var(--text)";
+        input.style.fontFamily = "var(--font-ui)";
+        input.style.fontSize = "12px";
+
+        nameSpan.replaceWith(input);
+        input.focus();
+        input.select();
+
+        function saveName() {
+          const newName = input.value.trim();
+          if (newName && newName !== oldName) {
+            memo.name = newName;
+            persistMemos();
+            renderTabs();
+            switchMemo(memoId);
+          } else {
+            renderTabs();
+            switchMemo(memoId);
+          }
+        }
+
+        input.addEventListener("blur", saveName);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            saveName();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            renderTabs();
+            switchMemo(memoId);
+          }
+        });
+      }
+
       function createNewMemo() {
+        saveUndoState();
         const num = memos.length + 1;
         const newMemo = {
           id: Date.now(),
@@ -1145,7 +1273,7 @@
         switchMemo(newMemo.id);
         // 名前をダブルクリックで編集できるようにするため、タブをクリック
         setTimeout(() => {
-          const tab = memoTabs.querySelector(`[data-id="${newMemo.id}"]`);
+          const tab = memoTabs.querySelector(`[data-memo-id="${newMemo.id}"]`);
           if (tab) tab.click();
         }, 50);
       }
@@ -1156,7 +1284,7 @@
           return;
         }
         const memo = memos.find((m) => m.id === memoId);
-        if (memo && confirm(`"${memo.name}" を削除しますか？`)) {
+        if (memo) {
           memos = memos.filter((m) => m.id !== memoId);
           if (currentMemoId === memoId) {
             currentMemoId = memos[0].id;
@@ -1164,7 +1292,6 @@
           persistMemos();
           renderMemoContent();
           renderTabs();
-          showToast("削除しました");
         }
       }
 
@@ -1178,6 +1305,10 @@
       document
         .getElementById("btn-new-memo")
         .addEventListener("click", createNewMemo);
+
+      document
+        .getElementById("btn-undo")
+        .addEventListener("click", restoreUndoState);
 
       // ── 自動保存 ──────────────────────────────────────────
       function markDirty() {
@@ -1408,12 +1539,10 @@
       // ── クリア ────────────────────────────────────────────
       document.getElementById("btn-clear").addEventListener("click", () => {
         if (!editor.value) return;
-        if (confirm("メモの内容をすべて削除しますか？")) {
-          editor.value = "";
-          markDirty();
-          updateStats();
-          showToast("クリアしました");
-        }
+        saveUndoState();
+        editor.value = "";
+        markDirty();
+        updateStats();
       });
 
       // ── 検索 ─────────────────────────────────────────────
@@ -1513,14 +1642,14 @@
 
       // ── キーボードショートカット ──────────────────────────
       const shortcuts = [
-        { key: "Ctrl+T", action: "新規メモ", fn: createNewMemo },
+        { key: "Alt+N", action: "新規メモ", fn: createNewMemo },
         {
-          key: "Ctrl+D",
+          key: "Alt+D",
           action: "日時を挿入",
           fn: () => document.getElementById("btn-timestamp").click(),
         },
         {
-          key: "Ctrl+S",
+          key: "Alt+S",
           action: "検索",
           fn: () => {
             if (searchBar.classList.contains("open")) {
@@ -1531,12 +1660,12 @@
           },
         },
         {
-          key: "Ctrl+A",
+          key: "Alt+A",
           action: "全コピー",
           fn: () => document.getElementById("btn-copy").click(),
         },
         {
-          key: "Ctrl+K",
+          key: "Alt+K",
           action: "保存",
           fn: () => {
             persist();
@@ -1544,13 +1673,13 @@
           },
         },
         {
-          key: "Ctrl+J",
+          key: "Alt+J",
           action: "全クリア",
           fn: () => document.getElementById("btn-clear").click(),
         },
         {
-          key: "Ctrl+W",
-          action: "メモを閉じる",
+          key: "Alt+.",
+          action: "メモを削除",
           fn: () => {
             if (currentMemoId) {
               deleteMemo(currentMemoId);
@@ -1560,17 +1689,22 @@
       ];
 
       document.addEventListener("keydown", (e) => {
-        const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+        const isAltKey = e.altKey;
+        // エディタ関連の要素がアクティブかどうかをチェック
+        const isEditorActive =
+          document.activeElement === editor ||
+          document.activeElement === searchInput ||
+          document.activeElement.closest(".editor-wrap");
 
-        if (isCtrlOrCmd && e.key.toLowerCase() === "t") {
+        if (isAltKey && e.key.toLowerCase() === "n" && isEditorActive) {
           e.preventDefault();
           createNewMemo();
         }
-        if (isCtrlOrCmd && e.key.toLowerCase() === "d") {
+        if (isAltKey && e.key.toLowerCase() === "d" && isEditorActive) {
           e.preventDefault();
           document.getElementById("btn-timestamp").click();
         }
-        if (isCtrlOrCmd && e.key.toLowerCase() === "s") {
+        if (isAltKey && e.key.toLowerCase() === "s" && isEditorActive) {
           e.preventDefault();
           if (searchBar.classList.contains("open")) {
             closeSearch();
@@ -1578,23 +1712,20 @@
             openSearch();
           }
         }
-        if (isCtrlOrCmd && e.key.toLowerCase() === "a") {
-          // Note: この条件は、エディタにフォーカスがある場合のみ、デフォルト動作を上書きします
-          if (document.activeElement === editor) {
-            e.preventDefault();
-            document.getElementById("btn-copy").click();
-          }
+        if (isAltKey && e.key.toLowerCase() === "a" && isEditorActive) {
+          e.preventDefault();
+          document.getElementById("btn-copy").click();
         }
-        if (isCtrlOrCmd && e.key.toLowerCase() === "k") {
+        if (isAltKey && e.key.toLowerCase() === "k" && isEditorActive) {
           e.preventDefault();
           persist();
           showToast("保存しました");
         }
-        if (isCtrlOrCmd && e.key.toLowerCase() === "j") {
+        if (isAltKey && e.key.toLowerCase() === "j" && isEditorActive) {
           e.preventDefault();
           document.getElementById("btn-clear").click();
         }
-        if (isCtrlOrCmd && e.key.toLowerCase() === "w") {
+        if (isAltKey && e.key === "." && isEditorActive) {
           e.preventDefault();
           if (currentMemoId) {
             deleteMemo(currentMemoId);
@@ -1666,6 +1797,7 @@
       renderTabs();
       renderMemoContent();
       updateStats();
+      updateUndoButtonState();
       editor.focus();
     </script>
   </body>
