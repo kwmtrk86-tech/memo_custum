@@ -241,7 +241,7 @@
       }
 
       .line-nums {
-        width: 48px;
+        width: 60px;
         padding: 16px 8px 16px 0;
         text-align: right;
         font-family: var(--font-editor);
@@ -255,6 +255,9 @@
         pointer-events: none;
         user-select: none;
         transition: background 0.2s;
+        position: sticky;
+        top: 0;
+        white-space: pre;
       }
 
       #editor {
@@ -367,6 +370,21 @@
       }
 
       /* ── PROFILE MENU ── */
+      .profile-name-display {
+        font-size: 12px;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 5px 10px;
+        border-radius: var(--radius);
+        transition: all 0.15s;
+        white-space: nowrap;
+        user-select: none;
+      }
+      .profile-name-display:hover {
+        color: var(--text);
+        background: var(--border);
+      }
+
       .profile-menu {
         position: relative;
         display: inline-block;
@@ -791,6 +809,10 @@
 
       <div class="spacer"></div>
 
+      <span class="profile-name-display" id="profile-name-display"
+        >デフォルト</span
+      >
+
       <div class="profile-menu">
         <button class="btn btn-icon" id="btn-profile" title="プロフィール管理">
           <svg
@@ -1088,14 +1110,67 @@
         }
       }
 
+      // プロフィール名編集
+      function editProfileName() {
+        const oldName = currentProfileName;
+        const newName = prompt(`プロフィール名を編集:\n\n現在: ${oldName}`);
+
+        if (!newName) return;
+        if (newName.length > 30) {
+          showToast("プロフィール名は30文字以内です");
+          return;
+        }
+        if (newName.trim().length === 0) {
+          showToast("プロフィール名を入力してください");
+          return;
+        }
+        if (newName === oldName) return;
+        if (profiles.some((p) => p.name === newName)) {
+          showToast("同じ名前のプロフィールが既に存在します");
+          return;
+        }
+
+        // 古い名前のメモデータを新しい名前でコピー
+        const oldMemoKey = MEMOS_KEY + "_" + oldName;
+        const memoData = localStorage.getItem(oldMemoKey);
+        if (memoData) {
+          const newMemoKey = MEMOS_KEY + "_" + newName;
+          localStorage.setItem(newMemoKey, memoData);
+          localStorage.removeItem(oldMemoKey);
+        }
+
+        // プロフィール名を更新
+        const profile = profiles.find((p) => p.name === oldName);
+        if (profile) {
+          profile.name = newName;
+        }
+        currentProfileName = newName;
+        persistProfiles();
+        renderProfileDropdown();
+        showToast(`プロフィール名を「${newName}」に変更しました`);
+      }
+
       // プロフィール切り替え
       function switchProfile(name) {
         if (!profiles.find((p) => p.name === name)) return;
+        // 現在のエディタ内容を保挙
+        const current = getCurrentMemo();
+        if (current) {
+          current.content = editor.value;
+        }
+        persistMemos();
+        // プロフィールを切り替え
         currentProfileName = name;
         persistProfiles();
+        // 新しいプロフィールのメモを読み込み
+        loadMemos();
         const profile = getCurrentProfile();
         applyProfile(profile);
         renderProfileDropdown();
+        renderTabs();
+        renderMemoContent();
+        updateStats();
+        editor.focus();
       }
 
       // プロフィール適用
@@ -1118,17 +1193,28 @@
           }
           select.appendChild(option);
         });
+        updateProfileNameDisplay();
+      }
+
+      function updateProfileNameDisplay() {
+        const display = document.getElementById("profile-name-display");
+        display.textContent = currentProfileName;
       }
 
       function loadMemos() {
-        const saved = localStorage.getItem(MEMOS_KEY);
+        const memoKey = MEMOS_KEY + "_" + currentProfileName;
+        const saved = localStorage.getItem(memoKey);
         if (saved) {
           memos = JSON.parse(saved);
         } else {
-          // 古い単一メモデータがあれば移行
-          const oldContent = localStorage.getItem("browser-memo-v1");
-          if (oldContent) {
-            memos = [{ id: Date.now(), name: "メモ 1", content: oldContent }];
+          // そのプロフィールで初めての場合、旧いデータから移行を試みる
+          if (currentProfileName === "デフォルト") {
+            const oldContent = localStorage.getItem("browser-memo-v1");
+            if (oldContent) {
+              memos = [{ id: Date.now(), name: "メモ 1", content: oldContent }];
+            } else {
+              memos = [{ id: Date.now(), name: "メモ 1", content: "" }];
+            }
           } else {
             memos = [{ id: Date.now(), name: "メモ 1", content: "" }];
           }
@@ -1141,7 +1227,8 @@
       }
 
       function persistMemos() {
-        localStorage.setItem(MEMOS_KEY, JSON.stringify(memos));
+        const memoKey = MEMOS_KEY + "_" + currentProfileName;
+        localStorage.setItem(memoKey, JSON.stringify(memos));
       }
 
       function getCurrentMemo() {
@@ -1179,12 +1266,13 @@
 
           const nameSpan = document.createElement("span");
           nameSpan.textContent = memo.name;
-          nameSpan.style.cursor = "text";
-          nameSpan.title = "ダブルクリックで名前を編集";
+          nameSpan.style.cursor = "pointer";
+          nameSpan.style.userSelect = "none";
+          nameSpan.title = "クリックで名前を編集";
 
-          nameSpan.addEventListener("dblclick", (e) => {
+          nameSpan.addEventListener("click", (e) => {
             e.stopPropagation();
-            editMemoName(memo.id, nameSpan);
+            editMemoName(memo.id);
           });
 
           const closeBtn = document.createElement("button");
@@ -1204,7 +1292,7 @@
               e.stopPropagation();
               return;
             }
-            if (!e.target.closest("input")) {
+            if (!e.target.closest("input") && e.target !== nameSpan) {
               switchMemo(memo.id);
             }
           });
@@ -1213,11 +1301,15 @@
         });
       }
 
-      function editMemoName(memoId, nameSpan) {
+      function editMemoName(memoId) {
         const memo = memos.find((m) => m.id === memoId);
         if (!memo) return;
 
         const oldName = memo.name;
+        const tab = memoTabs.querySelector(`[data-memo-id="${memoId}"]`);
+        if (!tab) return;
+
+        const nameSpan = tab.querySelector("span");
         const input = document.createElement("input");
         input.type = "text";
         input.value = oldName;
@@ -1229,6 +1321,7 @@
         input.style.color = "var(--text)";
         input.style.fontFamily = "var(--font-ui)";
         input.style.fontSize = "12px";
+        input.style.outline = "none";
 
         nameSpan.replaceWith(input);
         input.focus();
@@ -1239,23 +1332,28 @@
           if (newName && newName !== oldName) {
             memo.name = newName;
             persistMemos();
-            renderTabs();
-            switchMemo(memoId);
-          } else {
-            renderTabs();
-            switchMemo(memoId);
           }
+          renderTabs();
+          switchMemo(memoId);
+        }
+
+        function cancel() {
+          renderTabs();
+          switchMemo(memoId);
         }
 
         input.addEventListener("blur", saveName);
+        input.addEventListener("click", (e) => {
+          e.stopPropagation();
+        });
         input.addEventListener("keydown", (e) => {
+          e.stopPropagation();
           if (e.key === "Enter") {
             e.preventDefault();
             saveName();
           } else if (e.key === "Escape") {
             e.preventDefault();
-            renderTabs();
-            switchMemo(memoId);
+            cancel();
           }
         });
       }
@@ -1448,10 +1546,18 @@
       const profileBtn = document.getElementById("btn-profile");
       const profileDropdown = document.getElementById("profile-dropdown");
       const profileSelect = document.getElementById("profile-select");
+      const profileNameDisplay = document.getElementById(
+        "profile-name-display",
+      );
 
       profileBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         profileDropdown.classList.toggle("open");
+      });
+
+      profileNameDisplay.addEventListener("click", (e) => {
+        e.stopPropagation();
+        editProfileName();
       });
 
       profileSelect.addEventListener("change", (e) => {
@@ -1476,6 +1582,7 @@
       document.addEventListener("click", (e) => {
         if (
           !profileBtn.contains(e.target) &&
+          !profileNameDisplay.contains(e.target) &&
           !profileDropdown.contains(e.target)
         ) {
           profileDropdown.classList.remove("open");
@@ -1783,11 +1890,6 @@
       });
       editor.addEventListener("keyup", updateStats);
       editor.addEventListener("mouseup", updateStats);
-      editor.addEventListener("scroll", syncLineScroll);
-
-      function syncLineScroll() {
-        lineNums.scrollTop = editor.scrollTop;
-      }
 
       // ── 初期化 ────────────────────────────────────────────
       loadProfiles();
